@@ -14,9 +14,10 @@ el trabajo debe distribuirse en el tiempo desde ya.
 
 ## Reparto por responsable
 
-Cada integrante es dueño de un bloque vertical: modelo, servicios, API,
-frontend y pruebas de sus apps. Así cada quien puede defender su parte y el
-trabajo no se bloquea entre sí.
+Cada rol es **dueño** de un bloque de apps: es quien aprueba los pull requests
+de esas apps, quien mejor debe poder defenderlas y quien decide sobre ellas.
+Ser dueño no implica programarlo todo: quién implementa cada bloque está en la
+tabla de reparto de trabajo, más abajo.
 
 | Rol | Responsable | Apps y áreas | Componente de la rúbrica |
 |---|---|---|---|
@@ -41,6 +42,49 @@ integrante agrega su nombre real en el README.
 - El integrante **D** es dueño de `auditoria`, que se creó con la spec 001: su
   primer paso es leer esa app y su sección de la spec.
 - Todos revisan pull requests de todos.
+
+### Reparto de trabajo
+
+Decidido el 2026-10-20. La entrega es en 3 a 5 semanas (entre el 10 y el 24
+de noviembre de 2026, por confirmar con el catedrático), y no alcanza para
+que cada integrante construya su bloque completo a su ritmo. El integrante
+**A**, con apoyo de Claude Code, implementa la mayor parte; el resto del
+equipo implementa bloques autocontenidos que siguen patrones ya construidos.
+
+Los pesos son una estimación de esfuerzo, no una medición.
+
+| Bloque | Peso aprox. | Implementa | Revisa y aprueba |
+|---|---:|---|---|
+| Despliegue e integración continua (spec 002) | 5 % | A | Cualquier integrante |
+| Catálogo de propiedades | 12 % | A | Cualquier integrante |
+| CRM: clientes, agentes, cotizaciones | 8 % | A | **B** |
+| Ventas: contratos, planes y cuotas | 8 % | A | **B** |
+| Mensajería: ingesta de documentos y notificaciones | 7 % | A | **D** |
+| Agente de IA y RAG | 12 % | A | **C** |
+| Capa genérica de reportes y 7 reportes | 6 % | A | **D** |
+| Frontend: base y pantallas principales | 13 % | A | Cualquier integrante |
+| Datos de demostración y manual técnico | 3 % | A | Cualquier integrante |
+| **Arrendamientos**: backend y pantallas | 9 % | **B** | A |
+| **Compras y construcción**: backend y pantallas | 9 % | **C** | A |
+| **Power BI** y 8 de los 15 reportes | 8 % | **D** | A |
+
+Reparto resultante: alrededor de 74 % A y 26 % el resto del equipo.
+
+**Por qué así:**
+- A construye primero lo de mayor riesgo (despliegue, IA, mensajería) y los
+  patrones que los demás copian: el CRUD de catálogo, el flujo de ventas y la
+  capa genérica de reportes.
+- Los bloques de B, C y D empiezan cuando su patrón exista: arrendamientos
+  después de ventas, compras y construcción después de catálogo, los reportes
+  después de la capa genérica. Power BI puede empezar en cuanto haya tablas.
+- **Revisar es parte del trabajo de cada integrante, no un trámite.** El dueño
+  de cada área revisa y aprueba lo que A implementa en ella. Es la forma de
+  que cada quien pueda explicar en la defensa individual cualquier parte del
+  sistema (`docs/requisitos.md` §10), incluida la que no programó.
+
+**Ritmo de trabajo con el agente:** A implementa cada spec completa en varios
+commits pequeños y la explica al cerrarla, antes de abrir el pull request.
+Cada commit sigue siendo revisable por sí solo.
 
 ---
 
