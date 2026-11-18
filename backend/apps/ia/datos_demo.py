@@ -21,6 +21,12 @@ CARPETA_DOCUMENTOS = Path(__file__).resolve().parent / "documentos_demo"
 # Archivo, título, tipo y código ISO del país (None si aplica a todos).
 DOCUMENTOS_DEMO = [
     (
+        "manual-visitas-demostracion.md",
+        "Manual de visitas de demostración",
+        TipoDocumentoRAG.MANUAL,
+        None,
+    ),
+    (
         "politica-comercial.md",
         "Política comercial de la agencia",
         TipoDocumentoRAG.POLITICA,
