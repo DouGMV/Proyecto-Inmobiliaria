@@ -6,6 +6,7 @@ implementación y se cambia IA_PROVEEDOR, sin tocar servicios ni vistas.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -37,13 +38,14 @@ class Mensaje:
 class Herramienta:
     """Función del sistema que el modelo puede pedir que se ejecute.
 
-    Se define aquí porque es parte de la interfaz, pero las herramientas
-    llegan con su propia spec (spec 005, §2).
+    La declaración describe la función al proveedor. ejecutar es la función
+    autorizada del servidor que obtiene el dato cuando el modelo lo solicita.
     """
 
     nombre: str
     descripcion: str
     parametros: dict = field(default_factory=dict)
+    ejecutar: Callable[..., dict] | None = None
 
 
 @dataclass(frozen=True)

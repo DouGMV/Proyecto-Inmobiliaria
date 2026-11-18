@@ -33,6 +33,7 @@ from .instrucciones import (
 )
 from .models import DIMENSION_EMBEDDINGS, DocumentoRAG, FragmentoRAG
 from .proveedores.base import (
+    Herramienta,
     Mensaje,
     ProveedorIANoDisponible,
     RolMensaje,
@@ -439,6 +440,13 @@ def responder_consulta_publica(
     no en selectors. Si Gemini falla, la registra con exito=False y lanza
     AgenteNoDisponible.
     """
+    texto_pregunta = pregunta.casefold()
+    if "inventario" in texto_pregunta or (
+        "disponib" in texto_pregunta
+        and any(palabra in texto_pregunta for palabra in ("cuant", "cuánt", "cantidad"))
+    ):
+        return _responder_consulta_inventario(pregunta=pregunta, ip=ip)
+
     inicio = time.monotonic()
     fragmentos: list[FragmentoRAG] = []
     try:
@@ -518,6 +526,76 @@ def responder_consulta_publica(
     return resultado
 
 
+def _responder_consulta_inventario(*, pregunta: str, ip: str | None) -> RespuestaAgente:
+    inicio = time.monotonic()
+    invocadas = []
+
+    def contar_inventario_disponible() -> dict:
+        resultado = selectors.contar_inventario_disponible()
+        invocadas.append(
+            {
+                "nombre": "contar_inventario_disponible",
+                "argumentos": {},
+                "resultado": resultado,
+            }
+        )
+        return resultado
+
+    try:
+        respuesta = obtener_proveedor().generar_respuesta(
+            mensajes=[
+                Mensaje(
+                    RolMensaje.SISTEMA,
+                    "Eres el asistente de una agencia inmobiliaria. Para responder "
+                    "sobre el inventario actual debes solicitar la herramienta "
+                    "contar_inventario_disponible. Usa solo su resultado real. "
+                    "Responde en español indicando propiedades, unidades y total. "
+                    "No inventes cantidades ni citas documentales. Si la pregunta "
+                    "pide otro dato, explica que solo puedes consultar estos conteos.",
+                ),
+                Mensaje(RolMensaje.USUARIO, pregunta),
+            ],
+            herramientas=[
+                Herramienta(
+                    nombre="contar_inventario_disponible",
+                    descripcion=(
+                        "Consulta en la base actual cuántas propiedades y unidades "
+                        "activas están disponibles, sin duplicar edificios."
+                    ),
+                    ejecutar=contar_inventario_disponible,
+                )
+            ],
+        )
+        if not invocadas or not respuesta.texto.strip():
+            raise ProveedorIANoDisponible(
+                "No se obtuvo una respuesta con inventario consultado."
+            )
+    except ProveedorIANoDisponible as error:
+        _registrar_en_bitacora(
+            pregunta=pregunta,
+            respuesta="",
+            fragmentos=[],
+            tokens_entrada=None,
+            tokens_salida=None,
+            inicio=inicio,
+            error=str(error),
+            ip=ip,
+            herramientas_invocadas=invocadas,
+        )
+        raise AgenteNoDisponible() from error
+    _registrar_en_bitacora(
+        pregunta=pregunta,
+        respuesta=respuesta.texto,
+        fragmentos=[],
+        tokens_entrada=respuesta.tokens_entrada,
+        tokens_salida=respuesta.tokens_salida,
+        inicio=inicio,
+        ip=ip,
+        herramientas_invocadas=invocadas,
+    )
+    return RespuestaAgente(respuesta=respuesta.texto, sin_informacion=False, citas=[])
+
+
 def _registrar_en_bitacora(
     *,
     pregunta: str,
@@ -528,6 +606,7 @@ def _registrar_en_bitacora(
     inicio: float,
     error: str = "",
     ip: str | None = None,
+    herramientas_invocadas: list[dict] | None = None,
 ) -> None:
     """
     Escribe la consulta en la bitácora del agente (spec 015), con el contrato
@@ -537,7 +616,7 @@ def _registrar_en_bitacora(
     - documentos_recuperados: cada fragmento que se le dio al modelo, con su
       documento y su distancia, aunque el modelo no lo citara. Así se puede
       revisar después por qué respondió lo que respondió.
-    - herramientas_invocadas: vacía hasta que el agente tenga herramientas.
+    - herramientas_invocadas: funciones ejecutadas con argumentos y resultados.
     - duracion_ms: desde el inicio de la consulta, con time.monotonic(), que no
       salta si cambia la hora del servidor.
 
@@ -549,7 +628,7 @@ def _registrar_en_bitacora(
         modo=ModoAgente.PUBLICO,
         pregunta=pregunta,
         respuesta=respuesta,
-        herramientas_invocadas=[],
+        herramientas_invocadas=herramientas_invocadas or [],
         documentos_recuperados=[
             {
                 "fragmento_id": fragmento.pk,

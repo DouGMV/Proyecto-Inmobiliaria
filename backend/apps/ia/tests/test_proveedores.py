@@ -131,14 +131,90 @@ def test_generar_respuesta_separa_las_instrucciones_y_devuelve_los_tokens():
     assert [c.role for c in llamada["contents"]] == ["user"]
 
 
-def test_las_herramientas_todavia_no_estan_disponibles():
-    proveedor, modelos, _ = crear_proveedor([])
-    with pytest.raises(NotImplementedError):
+def respuesta_llamada(nombre="contar", argumentos=None):
+    llamada = SimpleNamespace(name=nombre, args=argumentos or {})
+    return SimpleNamespace(
+        function_calls=[llamada],
+        candidates=[
+            SimpleNamespace(
+                content=gemini.types.Content(
+                    role="model",
+                    parts=[
+                        gemini.types.Part.from_function_call(
+                            name=nombre, args=argumentos or {}
+                        )
+                    ],
+                )
+            )
+        ],
+        usage_metadata=SimpleNamespace(prompt_token_count=12, candidates_token_count=3),
+    )
+
+
+def test_herramienta_envia_resultado_real_al_modelo_y_acumula_tokens():
+    proveedor, modelos, _ = crear_proveedor(
+        [respuesta_llamada(), respuesta_texto("Hay 2.")]
+    )
+    ejecuciones = []
+
+    def contar():
+        ejecuciones.append(True)
+        return {"total": 2}
+
+    resultado = proveedor.generar_respuesta(
+        mensajes=[Mensaje(RolMensaje.USUARIO, "Cuenta el inventario")],
+        herramientas=[
+            Herramienta(
+                "contar", "Cuenta bienes", {"type": "object", "properties": {}}, contar
+            )
+        ],
+    )
+    assert ejecuciones == [True]
+    assert resultado.texto == "Hay 2."
+    assert (resultado.tokens_entrada, resultado.tokens_salida) == (24, 6)
+    contenido = modelos.llamadas[1]["contents"][-1]
+    assert contenido.role == "user"
+    assert contenido.parts[0].function_response.response == {"total": 2}
+
+
+@pytest.mark.parametrize(
+    "nombre,argumentos", [("no_autorizada", {}), ("contar", {"extra": 1})]
+)
+def test_rechaza_herramienta_o_argumentos_no_autorizados(nombre, argumentos):
+    proveedor, _, _ = crear_proveedor([respuesta_llamada(nombre, argumentos)])
+    ejecuciones = []
+
+    def contar():
+        ejecuciones.append(True)
+        return {"total": 2}
+
+    with pytest.raises(ProveedorIANoDisponible):
         proveedor.generar_respuesta(
-            mensajes=[Mensaje(RolMensaje.USUARIO, "Hola")],
-            herramientas=[Herramienta("buscar", "Busca propiedades")],
+            mensajes=[Mensaje(RolMensaje.USUARIO, "Cuenta")],
+            herramientas=[
+                Herramienta(
+                    "contar", "Cuenta", {"type": "object", "properties": {}}, contar
+                )
+            ],
         )
-    assert modelos.llamadas == []
+    assert ejecuciones == []
+
+
+def test_limita_los_intercambios_de_herramientas():
+    proveedor, modelos, _ = crear_proveedor([respuesta_llamada() for _ in range(3)])
+    with pytest.raises(ProveedorIANoDisponible):
+        proveedor.generar_respuesta(
+            mensajes=[Mensaje(RolMensaje.USUARIO, "Cuenta")],
+            herramientas=[
+                Herramienta(
+                    "contar",
+                    "Cuenta",
+                    {"type": "object", "properties": {}},
+                    lambda: {"total": 0},
+                )
+            ],
+        )
+    assert len(modelos.llamadas) == 3
 
 
 # ---------- Embeddings ----------

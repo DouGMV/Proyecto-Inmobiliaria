@@ -74,11 +74,6 @@ class ProveedorGemini(ProveedorIA):
         mensajes: list[Mensaje],
         herramientas: list[Herramienta] | None = None,
     ) -> RespuestaIA:
-        if herramientas:
-            raise NotImplementedError(
-                "Las herramientas del agente llegan con su propia spec."
-            )
-
         # Gemini recibe las instrucciones aparte de la conversación.
         instrucciones = "\n\n".join(
             m.contenido for m in mensajes if m.rol == RolMensaje.SISTEMA
@@ -95,6 +90,13 @@ class ProveedorGemini(ProveedorIA):
             max_output_tokens=self._max_tokens_respuesta,
         )
 
+        if herramientas:
+            return self._generar_con_herramientas(
+                contenidos=contenidos,
+                instrucciones=instrucciones,
+                herramientas=herramientas,
+            )
+
         respuesta = self._con_reintentos(
             lambda: self._cliente.models.generate_content(
                 model=self._modelo, contents=contenidos, config=configuracion
@@ -110,6 +112,77 @@ class ProveedorGemini(ProveedorIA):
             tokens_entrada=uso.prompt_token_count if uso else None,
             tokens_salida=uso.candidates_token_count if uso else None,
         )
+
+    def _generar_con_herramientas(
+        self, *, contenidos: list, instrucciones: str, herramientas: list[Herramienta]
+    ) -> RespuestaIA:
+        permitidas = {h.nombre: h for h in herramientas}
+        configuracion = types.GenerateContentConfig(
+            system_instruction=instrucciones,
+            max_output_tokens=self._max_tokens_respuesta,
+            tools=[
+                types.Tool(
+                    function_declarations=[
+                        types.FunctionDeclaration(
+                            name=h.nombre,
+                            description=h.descripcion,
+                            parameters=h.parametros or None,
+                        )
+                        for h in herramientas
+                    ]
+                )
+            ],
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                disable=True
+            ),
+        )
+        entrada, salida = 0, 0
+        for _ in range(3):
+            respuesta = self._con_reintentos(
+                lambda: self._cliente.models.generate_content(
+                    model=self._modelo, contents=contenidos, config=configuracion
+                )
+            )
+            uso = respuesta.usage_metadata
+            entrada = (
+                entrada + uso.prompt_token_count
+                if entrada is not None and uso and uso.prompt_token_count is not None
+                else None
+            )
+            salida = (
+                salida + uso.candidates_token_count
+                if salida is not None and uso and uso.candidates_token_count is not None
+                else None
+            )
+            llamadas = getattr(respuesta, "function_calls", None) or []
+            if not llamadas:
+                return RespuestaIA(
+                    texto=respuesta.text or "",
+                    modelo=self._modelo,
+                    tokens_entrada=entrada,
+                    tokens_salida=salida,
+                )
+            contenidos.append(respuesta.candidates[0].content)
+            resultados = []
+            if len(llamadas) > 3:
+                raise ProveedorIANoDisponible("Demasiadas llamadas de herramientas.")
+            for llamada in llamadas:
+                herramienta = permitidas.get(llamada.name)
+                if herramienta is None or herramienta.ejecutar is None:
+                    raise ProveedorIANoDisponible("Herramienta no autorizada.")
+                try:
+                    resultado = herramienta.ejecutar(**(llamada.args or {}))
+                except TypeError as error:
+                    raise ProveedorIANoDisponible(
+                        "Argumentos de herramienta no admitidos."
+                    ) from error
+                resultados.append(
+                    types.Part.from_function_response(
+                        name=llamada.name, response=resultado
+                    )
+                )
+            contenidos.append(types.Content(role="user", parts=resultados))
+        raise ProveedorIANoDisponible("Se agotaron los intercambios de herramientas.")
 
     def generar_embedding(self, *, texto: str, tarea: TareaEmbedding) -> list[float]:
         return self.generar_embeddings_lote(textos=[texto], tarea=tarea)[0]

@@ -6,7 +6,28 @@ Nunca escriben en la base de datos.
 from django.db.models import Count, QuerySet
 from pgvector.django import CosineDistance
 
+from apps.catalogo.selectors import listar_propiedades, listar_unidades
+
 from .models import DocumentoRAG, FragmentoRAG
+
+
+def contar_inventario_disponible() -> dict[str, int]:
+    """Bienes disponibles activos, sin contar edificios junto con sus unidades."""
+    propiedades = (
+        listar_propiedades()
+        .filter(estado="DISPONIBLE", tipo__requiere_unidades=False)
+        .count()
+    )
+    unidades = (
+        listar_unidades()
+        .filter(estado="DISPONIBLE", propiedad__tipo__requiere_unidades=True)
+        .count()
+    )
+    return {
+        "propiedades": propiedades,
+        "unidades": unidades,
+        "total": propiedades + unidades,
+    }
 
 
 def obtener_documento(*, documento_id: int) -> DocumentoRAG:
