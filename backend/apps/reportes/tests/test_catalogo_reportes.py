@@ -1,10 +1,13 @@
 """Reglas de la spec 021 en los reportes del catálogo: R06, R08 y R14."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+from io import BytesIO
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.utils import timezone
+from openpyxl import load_workbook
 from rest_framework.test import APIClient
 
 from apps.arrendamientos.enums import EstadoArrendamiento
@@ -18,6 +21,7 @@ from apps.catalogo.tests.factories import (
 )
 from apps.core.tests.factories import MonedaFactory, PaisFactory
 from apps.crm.tests.factories import ClienteFactory
+from apps.reportes.catalogo import definicion_reporte
 from apps.reportes.estructuras import (
     FiltrosAvaluos,
     FiltrosEstadoPropiedades,
@@ -37,6 +41,7 @@ from apps.usuarios.tests.factories import UsuarioFactory
 
 pytestmark = pytest.mark.django_db
 HOY = timezone.localdate()
+GUATEMALA = ZoneInfo("America/Guatemala")
 
 
 @pytest.fixture
@@ -103,6 +108,124 @@ def test_r06_filtra_por_estado_y_agrupa_por_estado_y_tipo():
 
     assert [f["estado"] for f in todas(seleccionar_estados, filtros)] == ["VENDIDA"]
     assert [g.etiqueta for g in resumen.agrupamientos] == ["VENDIDA / Casa"]
+
+
+# ---------- R06 · rango de fechas (Serie II, inciso 7) ----------
+
+
+def entrar_al_estado(monkeypatch, propiedad, estado, momento):
+    """Cambia el estado con la hora fijada: la bitácora pone su fecha con
+    auto_now_add, así que se fija timezone.now solo durante el cambio."""
+    with monkeypatch.context() as m:
+        m.setattr(timezone, "now", lambda: momento)
+        cambiar_estado_propiedad(
+            propiedad=propiedad,
+            estado=estado,
+            autor=UsuarioFactory(),
+            ip=None,
+            motivo="prueba",
+        )
+
+
+@pytest.fixture
+def tres_bienes(monkeypatch):
+    """Uno entró a RESERVADA el 5 de octubre a las 23:30 de Guatemala (ya el 6
+    en UTC), otro el 20 de octubre, y uno sin historia."""
+    a_tiempo = PropiedadFactory(estado="DISPONIBLE")
+    entrar_al_estado(
+        monkeypatch,
+        a_tiempo,
+        "RESERVADA",
+        datetime(2026, 10, 5, 23, 30, tzinfo=GUATEMALA),
+    )
+    despues = PropiedadFactory(estado="DISPONIBLE")
+    entrar_al_estado(
+        monkeypatch,
+        despues,
+        "RESERVADA",
+        datetime(2026, 10, 20, 9, 0, tzinfo=GUATEMALA),
+    )
+    PropiedadFactory(estado="DISPONIBLE")
+    return a_tiempo, despues
+
+
+def test_r06_filtra_por_el_dia_en_que_entro_al_estado(tres_bienes):
+    a_tiempo, _ = tres_bienes
+    filtros = FiltrosEstadoPropiedades(
+        fecha_desde=date(2026, 10, 1), fecha_hasta=date(2026, 10, 5)
+    )
+
+    filas = todas(seleccionar_estados, filtros)
+
+    # Entra el último día completo, aunque en UTC ya fuera el 6; quedan fuera
+    # el del 20 y el que no tiene historia.
+    assert [f["codigo"] for f in filas] == [a_tiempo.codigo]
+    assert filas[0]["fecha_estado"] == date(2026, 10, 5)
+    assert resumir_estados(filtros=filtros).count == 1
+
+
+def test_r06_solo_desde_o_sin_fechas(tres_bienes):
+    _, despues = tres_bienes
+
+    desde = todas(
+        seleccionar_estados, FiltrosEstadoPropiedades(fecha_desde=date(2026, 10, 6))
+    )
+
+    assert [f["codigo"] for f in desde] == [despues.codigo]
+    assert resumir_estados(filtros=FiltrosEstadoPropiedades()).count == 3
+
+
+def test_r06_el_rango_al_reves_responde_400():
+    cliente = APIClient()
+    cliente.force_authenticate(UsuarioFactory())
+
+    respuesta = cliente.get(
+        "/api/v1/reportes/propiedades-por-estado/"
+        "?fecha_desde=2026-10-31&fecha_hasta=2026-10-01"
+    )
+
+    assert respuesta.status_code == 400
+    assert "fecha_hasta" in respuesta.json()["error"]["detalles"]
+
+
+def test_r06_el_rango_se_aplica_en_pantalla_excel_y_pdf(tres_bienes):
+    a_tiempo, despues = tres_bienes
+    cliente = APIClient()
+    cliente.force_authenticate(UsuarioFactory())
+    url = (
+        "/api/v1/reportes/propiedades-por-estado/{}"
+        "?fecha_desde=2026-10-01&fecha_hasta=2026-10-05"
+    )
+
+    pantalla = cliente.get(url.format(""))
+    excel = cliente.get(url.format("excel/"))
+    pdf = cliente.get(url.format("pdf/"))
+
+    assert pantalla.status_code == 200
+    assert [f["codigo"] for f in pantalla.json()["filas"]["results"]] == [
+        a_tiempo.codigo
+    ]
+    assert excel.status_code == 200
+    celdas = {
+        celda
+        for fila in load_workbook(BytesIO(excel.content))["Reporte"].iter_rows(
+            values_only=True
+        )
+        for celda in fila
+    }
+    assert a_tiempo.codigo in celdas
+    assert despues.codigo not in celdas
+    assert pdf.status_code == 200
+    assert pdf["Content-Type"] == "application/pdf"
+    assert pdf.content.startswith(b"%PDF")
+
+
+def test_r06_el_catalogo_publica_los_filtros_de_fecha():
+    nombres = [
+        f["nombre"] for f in definicion_reporte("propiedades-por-estado")["filtros"]
+    ]
+
+    assert {"fecha_desde", "fecha_hasta"} <= set(nombres)
 
 
 # ---------- R08 Evolución de avalúos ----------

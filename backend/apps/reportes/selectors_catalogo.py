@@ -8,7 +8,7 @@ que trae solo las filas de la página. Los tres los leen todos los roles
 """
 
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
@@ -108,10 +108,36 @@ def _bienes_por_estado(filtros: FiltrosEstadoPropiedades) -> tuple[QuerySet, Que
                 consulta = consulta.filter(**{prefijo + campo: valor})
         if filtros.estado is not None:
             consulta = consulta.filter(estado=filtros.estado)
-        fuentes.append(
-            consulta.order_by().annotate(fecha_estado=_fecha_de_entrada(modelo))
-        )
+        consulta = consulta.order_by().annotate(fecha_estado=_fecha_de_entrada(modelo))
+        fuentes.append(_filtrar_por_fecha_estado(consulta, filtros))
     return tuple(fuentes)
+
+
+def _filtrar_por_fecha_estado(
+    consulta: QuerySet, filtros: FiltrosEstadoPropiedades
+) -> QuerySet:
+    """
+    Serie II, inciso 7: rango de días de Guatemala, inclusivo, sobre la fecha
+    en que el bien entró a su estado actual. Igual que la bitácora (R17), el
+    límite superior es el inicio del día siguiente, exclusivo: así entra todo
+    el último día sin depender de la hora.
+
+    Un bien sin historia (fecha null) no cumple ningún rango: si se pide un
+    período, no se puede afirmar que entró a su estado dentro de él.
+    """
+    if filtros.fecha_desde is not None:
+        consulta = consulta.filter(
+            fecha_estado__gte=datetime.combine(
+                filtros.fecha_desde, time.min, tzinfo=GUATEMALA
+            )
+        )
+    if filtros.fecha_hasta is not None:
+        consulta = consulta.filter(
+            fecha_estado__lt=datetime.combine(
+                filtros.fecha_hasta + timedelta(days=1), time.min, tzinfo=GUATEMALA
+            )
+        )
+    return consulta
 
 
 def resumir_estados(

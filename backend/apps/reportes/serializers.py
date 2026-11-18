@@ -196,7 +196,9 @@ class FiltrosMorosidadSerializer(FiltrosBaseSerializer):
         return attrs
 
 
-class FiltrosEstadoPropiedadesSerializer(FiltrosBaseSerializer):
+class FiltrosEstadoPropiedadesSerializer(FiltrosPeriodoSerializer):
+    """Hereda fecha_desde/fecha_hasta y la validación del rango al revés."""
+
     pais = serializers.IntegerField(min_value=1, required=False)
     ciudad = serializers.IntegerField(min_value=1, required=False)
     tipo = serializers.IntegerField(min_value=1, required=False)

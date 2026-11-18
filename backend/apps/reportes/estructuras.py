@@ -113,6 +113,9 @@ class FiltrosEstadoPropiedades:
     ciudad: int | None = None
     tipo: int | None = None
     estado: str | None = None
+    # Serie II, inciso 7: día (de Guatemala) en que el bien entró a su estado.
+    fecha_desde: date | None = None
+    fecha_hasta: date | None = None
 
 
 @dataclass(frozen=True)

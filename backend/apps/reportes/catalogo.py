@@ -285,6 +285,8 @@ CATALOGO.update(
                 CIUDAD,
                 TIPO_PROPIEDAD,
                 filtro("estado", "Estado", opciones=opciones(EstadoPropiedad.choices)),
+                # Serie II, inciso 7: sobre la columna "En el estado desde".
+                *filtros_periodo("En el estado"),
             ],
         },
         "evolucion-avaluos": {
