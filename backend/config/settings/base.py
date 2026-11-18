@@ -7,6 +7,7 @@ lee de variables de entorno; nunca se escribe aquí.
 """
 
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import environ
@@ -357,3 +358,15 @@ IA_MAX_TOKENS_RESPUESTA = env.int("IA_MAX_TOKENS_RESPUESTA", default=1024)
 # 0.42: en la prueba real del 2026-10-31 las preguntas relevantes quedaron
 # entre 0.19 y 0.38 y las ajenas desde 0.47.
 IA_DISTANCIA_MAXIMA = env.float("IA_DISTANCIA_MAXIMA", default=0.42)
+# Precio en USD por millón de tokens del IA_MODELO, para estimar el costo de
+# cada consulta (Serie II, inciso 9). Valores de la API de Gemini para
+# gemini-3.5-flash-lite en el plan de pago estándar: 0.30 la entrada y 2.50 la
+# salida (la salida incluye los tokens de razonamiento). Si cambia el modelo o
+# el precio, se cambian aquí o en el entorno, sin tocar código. Decimal y no
+# float: es dinero.
+IA_PRECIO_ENTRADA_USD_MILLON = Decimal(
+    env("IA_PRECIO_ENTRADA_USD_MILLON", default="0.30")
+)
+IA_PRECIO_SALIDA_USD_MILLON = Decimal(
+    env("IA_PRECIO_SALIDA_USD_MILLON", default="2.50")
+)

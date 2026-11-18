@@ -7,6 +7,7 @@ import { Button } from '../../componentes/ui/button'
 import { Card, CardContent } from '../../componentes/ui/card'
 import { Label } from '../../componentes/ui/label'
 import { useSesion } from '../../sesion/useSesion'
+import { ConsumoConsulta } from './ConsumoConsulta'
 import { RespuestaConCitas } from './RespuestaConCitas'
 
 /** Spec 005, regla 8: entre 3 y 500 caracteres. */
@@ -135,6 +136,8 @@ export function Asistente() {
                     prefijo={prefijo}
                   />
                 ))}
+              {/* Serie II, inciso 9: tokens y costo de esta consulta. */}
+              {turno.respuesta && <ConsumoConsulta {...turno.respuesta} />}
             </CardContent>
           </Card>
         )

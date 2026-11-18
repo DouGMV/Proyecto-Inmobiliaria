@@ -4,6 +4,7 @@ import pytest
 from django.core.cache import cache
 from rest_framework.test import APIClient
 
+from apps.auditoria.models import LogAgenteIA
 from apps.ia.models import DocumentoRAG, FragmentoRAG
 
 from .proveedor_falso import vector_eje
@@ -113,3 +114,29 @@ def test_la_peticion_once_en_un_minuto_responde_429(cliente, proveedor_falso):
 
 def test_solo_acepta_post(cliente):
     assert cliente.get(URL).status_code == 405
+
+
+def test_devuelve_los_tokens_y_el_costo_estimado(
+    cliente, proveedor_falso, fragmento_reservas
+):
+    """Serie II, inciso 9: el proveedor falso reporta 10 de entrada y 5 de
+    salida. (10 × 0.30 + 5 × 2.50) / 1e6 = 0.0000155 → 0.000016 USD."""
+    proveedor_falso.vectores[PREGUNTA] = vector_eje(0)
+
+    datos = cliente.post(URL, {"pregunta": PREGUNTA}, format="json").json()
+
+    assert datos["tokens_entrada"] == 10
+    assert datos["tokens_salida"] == 5
+    assert datos["costo_estimado_usd"] == "0.000016"
+    # Son los mismos contadores que quedan en la bitácora.
+    registro = LogAgenteIA.objects.get()
+    assert (registro.tokens_entrada, registro.tokens_salida) == (10, 5)
+
+
+def test_sin_informacion_el_consumo_es_cero(cliente, proveedor_falso):
+    datos = cliente.post(URL, {"pregunta": PREGUNTA}, format="json").json()
+
+    assert datos["sin_informacion"] is True
+    assert datos["tokens_entrada"] == 0
+    assert datos["tokens_salida"] == 0
+    assert datos["costo_estimado_usd"] == "0.000000"

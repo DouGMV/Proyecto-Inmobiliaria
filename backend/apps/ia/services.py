@@ -6,7 +6,8 @@ No conocen request ni hablan HTTP.
 
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
@@ -70,6 +71,38 @@ class RespuestaAgente:
     respuesta: str
     sin_informacion: bool
     citas: list[Cita]
+    # Serie II, inciso 9. None = desconocido (el proveedor no los reportó);
+    # cero = se sabe que no se gastó nada (no se llamó al modelo).
+    tokens_entrada: int | None = None
+    tokens_salida: int | None = None
+    costo_estimado_usd: Decimal | None = None
+
+
+# Seis decimales: una consulta típica cuesta fracciones de centavo de dólar.
+PRECISION_COSTO = Decimal("0.000001")
+UN_MILLON = Decimal(1_000_000)
+
+
+def estimar_costo_usd(
+    *, tokens_entrada: int | None, tokens_salida: int | None
+) -> Decimal | None:
+    """Costo aproximado de una consulta en USD (Serie II, inciso 9).
+
+    costo = entrada × precio_entrada / 1e6 + salida × precio_salida / 1e6,
+    con los precios por millón de settings. Es una estimación: no considera
+    caché, lotes ni la cuota gratuita, y los embeddings de la pregunta se
+    cobran aparte.
+
+    Si falta cualquiera de los dos contadores, el costo también es
+    desconocido (None): sumar solo la parte conocida daría un número falso.
+    """
+    if tokens_entrada is None or tokens_salida is None:
+        return None
+    costo = (
+        Decimal(tokens_entrada) * settings.IA_PRECIO_ENTRADA_USD_MILLON
+        + Decimal(tokens_salida) * settings.IA_PRECIO_SALIDA_USD_MILLON
+    ) / UN_MILLON
+    return costo.quantize(PRECISION_COSTO, rounding=ROUND_HALF_UP)
 
 
 def crear_documento_rag(
@@ -571,7 +604,15 @@ def responder_consulta_publica(*, pregunta: str) -> RespuestaAgente:
         inicio=inicio,
         herramientas=herramientas,
     )
-    return resultado
+    # Los mismos contadores que quedaron en la bitácora, más su costo.
+    return replace(
+        resultado,
+        tokens_entrada=tokens_entrada,
+        tokens_salida=tokens_salida,
+        costo_estimado_usd=estimar_costo_usd(
+            tokens_entrada=tokens_entrada, tokens_salida=tokens_salida
+        ),
+    )
 
 
 def _registrar_en_bitacora(

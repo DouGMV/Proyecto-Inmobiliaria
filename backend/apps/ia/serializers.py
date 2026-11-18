@@ -30,6 +30,13 @@ class RespuestaAgenteSerializer(serializers.Serializer):
     respuesta = serializers.CharField()
     sin_informacion = serializers.BooleanField()
     citas = CitaSerializer(many=True)
+    # Serie II, inciso 9: consumo de la consulta. null = desconocido.
+    tokens_entrada = serializers.IntegerField(allow_null=True)
+    tokens_salida = serializers.IntegerField(allow_null=True)
+    # Texto decimal exacto ("0.001080"), como los montos del resto de la API.
+    costo_estimado_usd = serializers.DecimalField(
+        max_digits=12, decimal_places=6, allow_null=True
+    )
 
 
 class DocumentoAgenteSerializer(serializers.ModelSerializer):

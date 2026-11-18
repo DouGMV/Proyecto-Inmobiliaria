@@ -3132,6 +3132,10 @@ export interface components {
             respuesta: string;
             sin_informacion: boolean;
             citas: components["schemas"]["Cita"][];
+            tokens_entrada: number | null;
+            tokens_salida: number | null;
+            /** Format: decimal */
+            costo_estimado_usd: string | null;
         };
         RestablecerContrasena: {
             password: string;
