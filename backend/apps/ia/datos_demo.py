@@ -44,6 +44,12 @@ DOCUMENTOS_DEMO = [
         TipoDocumentoRAG.LEGAL,
         "MEX",
     ),
+    (
+        "politica-arrendamientos.md",
+        "Política de arrendamientos",
+        TipoDocumentoRAG.POLITICA,
+        None,
+    ),
 ]
 
 
