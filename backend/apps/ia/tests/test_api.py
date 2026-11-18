@@ -4,6 +4,7 @@ import pytest
 from django.core.cache import cache
 from rest_framework.test import APIClient
 
+from apps.auditoria.models import LogAgenteIA
 from apps.ia.models import DocumentoRAG, FragmentoRAG
 
 from .proveedor_falso import vector_eje
@@ -113,3 +114,30 @@ def test_la_peticion_once_en_un_minuto_responde_429(cliente, proveedor_falso):
 
 def test_solo_acepta_post(cliente):
     assert cliente.get(URL).status_code == 405
+
+
+def test_la_bitacora_guarda_la_ip_de_quien_pregunta(
+    cliente, proveedor_falso, fragmento_reservas
+):
+    """Serie II, inciso 5: la vista calcula la IP y el servicio la registra."""
+    proveedor_falso.vectores[PREGUNTA] = vector_eje(0)
+
+    respuesta = cliente.post(
+        URL, {"pregunta": PREGUNTA}, format="json", REMOTE_ADDR="190.56.12.34"
+    )
+
+    assert respuesta.status_code == 200
+    assert LogAgenteIA.objects.get().ip == "190.56.12.34"
+
+
+def test_una_consulta_fallida_tambien_guarda_la_ip(cliente, proveedor_falso):
+    proveedor_falso.falla = True
+
+    respuesta = cliente.post(
+        URL, {"pregunta": PREGUNTA}, format="json", REMOTE_ADDR="190.56.12.34"
+    )
+
+    assert respuesta.status_code == 503
+    registro = LogAgenteIA.objects.get()
+    assert registro.exito is False
+    assert registro.ip == "190.56.12.34"

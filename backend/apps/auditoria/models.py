@@ -108,6 +108,11 @@ class LogAgenteIA(models.Model):
     duracion_ms = models.PositiveIntegerField()
     exito = models.BooleanField()
     error = models.TextField(blank=True)
+    # IP del visitante que preguntó (Serie II, inciso 5). El agente es
+    # público y no tiene usuario: la IP es el único rastro de quién consultó.
+    # Nula en consultas que no vienen de una petición HTTP (shell, pruebas)
+    # o en registros anteriores a este campo.
+    ip = models.GenericIPAddressField(null=True, blank=True)
     fecha = models.DateTimeField(auto_now_add=True)
 
     class Meta:

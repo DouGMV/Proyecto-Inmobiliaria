@@ -470,7 +470,9 @@ def sincronizar_catalogo_publico() -> bool:
     return True
 
 
-def responder_consulta_publica(*, pregunta: str) -> RespuestaAgente:
+def responder_consulta_publica(
+    *, pregunta: str, ip: str | None = None
+) -> RespuestaAgente:
     """Responde la pregunta de un visitante con los documentos de la agencia.
 
     1. Convierte la pregunta en vector y busca los fragmentos más cercanos.
@@ -483,6 +485,9 @@ def responder_consulta_publica(*, pregunta: str) -> RespuestaAgente:
     (spec 015) con el contrato acordado en el PR #61: por eso va en services y
     no en selectors. Si Gemini falla, la registra con exito=False y lanza
     AgenteNoDisponible.
+
+    ip es la del visitante (la calcula la vista); solo se guarda en la
+    bitácora, no cambia la respuesta.
     """
     inicio = time.monotonic()
     fragmentos: list[FragmentoRAG] = []
@@ -559,6 +564,7 @@ def responder_consulta_publica(*, pregunta: str) -> RespuestaAgente:
             inicio=inicio,
             error=str(error),
             herramientas=herramientas,
+            ip=ip,
         )
         raise AgenteNoDisponible() from error
 
@@ -570,6 +576,7 @@ def responder_consulta_publica(*, pregunta: str) -> RespuestaAgente:
         tokens_salida=tokens_salida,
         inicio=inicio,
         herramientas=herramientas,
+        ip=ip,
     )
     return resultado
 
@@ -584,6 +591,7 @@ def _registrar_en_bitacora(
     inicio: float,
     error: str = "",
     herramientas: list[dict] | None = None,
+    ip: str | None = None,
 ) -> None:
     """
     Escribe la consulta en la bitácora del agente (spec 015), con el contrato
@@ -623,6 +631,7 @@ def _registrar_en_bitacora(
         duracion_ms=int((time.monotonic() - inicio) * 1000),
         exito=not error,
         error=error,
+        ip=ip,
     )
 
 

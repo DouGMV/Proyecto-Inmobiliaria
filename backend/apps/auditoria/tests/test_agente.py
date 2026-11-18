@@ -222,3 +222,23 @@ def test_registrar_fallo_despues_de_revertir_lo_conserva():
     )
 
     assert LogAgenteIA.objects.get(pk=registro.pk).error == "El proveedor no respondió."
+
+
+def test_guarda_la_ip_del_visitante():
+    """Serie II, inciso 5: la bitácora del agente registra la IP."""
+    registro = registrar(ip="190.56.12.34")
+
+    registro.refresh_from_db()
+    assert registro.ip == "190.56.12.34"
+
+
+def test_sin_ip_queda_nula():
+    assert registrar().ip is None
+
+
+def test_rechaza_una_ip_invalida_sin_insertar():
+    with pytest.raises(ValidationError) as error:
+        registrar(ip="no-es-una-ip")
+
+    assert "ip" in error.value.message_dict
+    assert not LogAgenteIA.objects.exists()

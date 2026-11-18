@@ -31,7 +31,7 @@ class LogAuditoriaAdmin(admin.ModelAdmin):
 class LogAgenteIAAdmin(admin.ModelAdmin):
     """Consulta la evidencia del agente sin crearla, alterarla ni borrarla."""
 
-    list_display = ["fecha", "modo", "usuario", "exito", "duracion_ms"]
+    list_display = ["fecha", "modo", "usuario", "ip", "exito", "duracion_ms"]
     list_filter = ["modo", "exito"]
     date_hierarchy = "fecha"
     list_select_related = ["usuario"]

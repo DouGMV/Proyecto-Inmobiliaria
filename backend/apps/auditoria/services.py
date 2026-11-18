@@ -62,12 +62,14 @@ def registrar_consulta_agente(
     duracion_ms: int,
     exito: bool,
     error: str = "",
+    ip: str | None = None,
 ) -> LogAgenteIA:
     """Registra una consulta completa, sin llamar a IA ni abrir un atomic.
 
     Se llama una vez al finalizar la consulta, también ante fallo. El error
     debe ser un diagnóstico controlado, nunca una excepción cruda con secretos.
-    Los tokens desconocidos se conservan como None, no como cero.
+    Los tokens desconocidos se conservan como None, no como cero. La ip la
+    calcula la vista con obtener_ip_cliente; None si no hubo petición HTTP.
 
     Es una sola inserción: en autocommit se confirma al guardar; dentro de una
     transacción del llamador participa en ella y se revierte con ella.
@@ -108,6 +110,7 @@ def registrar_consulta_agente(
         duracion_ms=duracion_ms,
         exito=exito,
         error=error,
+        ip=ip,
     )
     registro.full_clean()
     registro.save()
