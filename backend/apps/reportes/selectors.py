@@ -50,6 +50,18 @@ def _fuentes_inventario(filtros: FiltrosInventario) -> tuple[QuerySet, QuerySet]
     fuentes = []
     for consulta, prefijo in ((propiedades, ""), (unidades, "propiedad__")):
         consulta = consulta.filter(estado="DISPONIBLE")
+        if filtros.fecha_desde is not None:
+            consulta = consulta.filter(
+                creado_en__gte=datetime.combine(
+                    filtros.fecha_desde, time.min, tzinfo=GUATEMALA
+                )
+            )
+        if filtros.fecha_hasta is not None:
+            consulta = consulta.filter(
+                creado_en__lt=datetime.combine(
+                    filtros.fecha_hasta + timedelta(days=1), time.min, tzinfo=GUATEMALA
+                )
+            )
         for campo, valor in (
             ("ciudad__pais_id", filtros.pais),
             ("ciudad_id", filtros.ciudad),

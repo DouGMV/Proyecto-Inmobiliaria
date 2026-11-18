@@ -15,7 +15,7 @@ from openpyxl import load_workbook
 from rest_framework.test import APIClient
 
 from apps.auditoria.models import LogAuditoria
-from apps.catalogo.models import Propiedad
+from apps.catalogo.models import Propiedad, Unidad
 from apps.catalogo.tests.factories import (
     DocumentoOficialFactory,
     PropiedadFactory,
@@ -91,6 +91,56 @@ def test_inventario_no_duplica_edificio_y_separa_monedas():
     )
     filas = seleccionar_filas_reporte(slug=SLUG, filtros=filtros, offset=0, limite=25)
     assert [(f["origen"], f["id"]) for f in filas] == [("PROPIEDAD", casa.id)]
+
+
+@pytest.mark.parametrize("fabrica", [PropiedadFactory, UnidadFactory])
+def test_inventario_fechas_incluye_dias_completos_de_guatemala(usuario, fabrica):
+    dia = date(2026, 11, 18)
+    inicio = datetime(2026, 11, 18, tzinfo=GUATEMALA)
+    siguiente = inicio + timedelta(days=1)
+    bienes = [fabrica(estado="DISPONIBLE") for _ in range(4)]
+    instantes = [
+        inicio - timedelta(microseconds=1),
+        inicio,
+        siguiente - timedelta(microseconds=1),
+        siguiente,
+    ]
+    for bien, instante in zip(bienes, instantes, strict=True):
+        modelo = Unidad if isinstance(bien, Unidad) else Propiedad
+        modelo.objects.filter(pk=bien.pk).update(creado_en=instante)
+
+    filtros = FiltrosInventario(fecha_desde=dia, fecha_hasta=dia)
+    pagina = obtener_reporte_paginado(slug=SLUG, filtros=filtros, usuario=usuario)
+    exportado = obtener_reporte_exportacion(slug=SLUG, filtros=filtros, usuario=usuario)
+    assert pagina.count == 2
+    assert {fila["id"] for fila in pagina.reporte.filas} == {b.pk for b in bienes[1:3]}
+    assert exportado.filas == pagina.reporte.filas
+    assert exportado.totales == pagina.reporte.totales
+    assert "fecha_desde: 2026-11-18" in exportado.subtitulo
+    assert (
+        resumir_reporte(slug=SLUG, filtros=FiltrosInventario(fecha_desde=dia)).count
+        == 3
+    )
+    assert (
+        resumir_reporte(slug=SLUG, filtros=FiltrosInventario(fecha_hasta=dia)).count
+        == 3
+    )
+
+
+@pytest.mark.parametrize("sufijo", ["", "excel/", "pdf/"])
+@pytest.mark.parametrize(
+    "parametros",
+    [
+        {"fecha_desde": "2026-11-19", "fecha_hasta": "2026-11-18"},
+        {"fecha_hasta": "9999-12-31"},
+        {"fecha_desde": "no-es-fecha"},
+    ],
+)
+def test_inventario_rechaza_fechas_invalidas_en_todas_las_salidas(
+    cliente, sufijo, parametros
+):
+    respuesta = cliente.get(f"/api/v1/reportes/{SLUG}/{sufijo}", parametros)
+    assert respuesta.status_code == 400
 
 
 def test_sesenta_filas_pagina_en_sql_y_exporta_todo(usuario):

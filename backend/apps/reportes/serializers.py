@@ -44,6 +44,8 @@ class FiltrosBaseSerializer(serializers.Serializer):
 
 
 class FiltrosInventarioSerializer(FiltrosBaseSerializer):
+    fecha_desde = serializers.DateField(required=False, input_formats=["%Y-%m-%d"])
+    fecha_hasta = serializers.DateField(required=False, input_formats=["%Y-%m-%d"])
     pais = serializers.IntegerField(min_value=1, required=False)
     ciudad = serializers.IntegerField(min_value=1, required=False)
     tipo = serializers.IntegerField(min_value=1, required=False)
@@ -62,6 +64,15 @@ class FiltrosInventarioSerializer(FiltrosBaseSerializer):
     )
 
     def validate(self, attrs):
+        desde, hasta = attrs.get("fecha_desde"), attrs.get("fecha_hasta")
+        if desde and hasta and desde > hasta:
+            raise serializers.ValidationError(
+                {"fecha_hasta": "Debe ser mayor o igual a desde."}
+            )
+        if hasta and hasta.year == 9999:
+            raise serializers.ValidationError(
+                {"fecha_hasta": "La fecha máxima admitida es 9998-12-31."}
+            )
         if ("precio_min" in attrs or "precio_max" in attrs) and "moneda" not in attrs:
             raise serializers.ValidationError(
                 {"moneda": "Indique moneda para filtrar por precio."}

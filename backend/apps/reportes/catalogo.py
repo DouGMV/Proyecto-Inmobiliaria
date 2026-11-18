@@ -62,6 +62,7 @@ CATALOGO = {
             filtro("ciudad", "Ciudad", "entero", "/ciudades/"),
             filtro("tipo", "Tipo de propiedad", "entero", "/tipos-propiedad/"),
             filtro("moneda", "Moneda", "texto", "/monedas/"),
+            *filtros_periodo("Registro"),
             *[
                 filtro(n, e, "decimal")
                 for n, e in [

@@ -22,6 +22,8 @@ class Grupo:
 
 @dataclass(frozen=True)
 class FiltrosInventario:
+    fecha_desde: date | None = None
+    fecha_hasta: date | None = None
     pais: int | None = None
     ciudad: int | None = None
     tipo: int | None = None
