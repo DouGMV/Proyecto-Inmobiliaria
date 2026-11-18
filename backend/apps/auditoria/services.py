@@ -62,6 +62,7 @@ def registrar_consulta_agente(
     duracion_ms: int,
     exito: bool,
     error: str = "",
+    ip: str | None = None,
 ) -> LogAgenteIA:
     """Registra una consulta completa, sin llamar a IA ni abrir un atomic.
 
@@ -108,6 +109,7 @@ def registrar_consulta_agente(
         duracion_ms=duracion_ms,
         exito=exito,
         error=error,
+        ip=ip,
     )
     registro.full_clean()
     registro.save()

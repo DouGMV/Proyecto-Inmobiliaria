@@ -4,6 +4,7 @@ import pytest
 from django.core.cache import cache
 from rest_framework.test import APIClient
 
+from apps.auditoria.models import LogAgenteIA
 from apps.ia.models import DocumentoRAG, FragmentoRAG
 
 from .proveedor_falso import vector_eje
@@ -113,3 +114,22 @@ def test_la_peticion_once_en_un_minuto_responde_429(cliente, proveedor_falso):
 
 def test_solo_acepta_post(cliente):
     assert cliente.get(URL).status_code == 405
+
+
+@pytest.mark.parametrize("falla", [False, True])
+def test_registra_ip_de_la_conexion_sin_exponerla(cliente, proveedor_falso, falla):
+    proveedor_falso.falla = falla
+
+    respuesta = cliente.post(
+        URL,
+        {"pregunta": PREGUNTA},
+        format="json",
+        REMOTE_ADDR="192.0.2.10",
+        HTTP_X_FORWARDED_FOR="198.51.100.20",
+    )
+
+    assert respuesta.status_code == (503 if falla else 200)
+    registro = LogAgenteIA.objects.get()
+    assert registro.ip == "192.0.2.10"
+    assert registro.exito is (not falla)
+    assert "ip" not in respuesta.json()

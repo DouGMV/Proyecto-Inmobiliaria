@@ -69,7 +69,8 @@ class ConsultaAgenteView(APIView):
         entrada = ConsultaAgenteSerializer(data=request.data)
         entrada.is_valid(raise_exception=True)
         resultado = responder_consulta_publica(
-            pregunta=entrada.validated_data["pregunta"]
+            pregunta=entrada.validated_data["pregunta"],
+            ip=obtener_ip_cliente(request),
         )
         return Response(RespuestaAgenteSerializer(resultado).data)
 

@@ -33,6 +33,19 @@ def registrar(**cambios):
     return registrar_consulta_agente(**datos)
 
 
+@pytest.mark.parametrize("ip", [None, "192.0.2.10", "2001:db8::1"])
+def test_registra_ip_opcional(ip):
+    registro = registrar(ip=ip)
+    registro.refresh_from_db()
+    assert registro.ip == ip
+
+
+def test_rechaza_ip_invalida():
+    with pytest.raises(ValidationError):
+        registrar(ip="direccion-invalida")
+    assert not LogAgenteIA.objects.exists()
+
+
 def test_conserva_usuario_fuentes_herramientas_y_metricas():
     usuario = UsuarioFactory()
     fuentes = [

@@ -105,6 +105,7 @@ class LogAgenteIA(models.Model):
     # None es desconocido; cero significa que se conoce consumo cero.
     tokens_entrada = models.PositiveIntegerField(null=True, blank=True)
     tokens_salida = models.PositiveIntegerField(null=True, blank=True)
+    ip = models.GenericIPAddressField(null=True, blank=True)
     duracion_ms = models.PositiveIntegerField()
     exito = models.BooleanField()
     error = models.TextField(blank=True)
